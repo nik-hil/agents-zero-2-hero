@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  agent:
+    build: .
+    container_name: ai-agent-bash-demo
+    # Load environment variables (create a host .env with OPENROUTER_API_KEY)
+    env_file:
+      - .env
+
+    # Mount project for live edits and a workspace for persistent files
+    volumes:
+      - ./:/app:cached
+      - ./workspace:/app/workspace
+    working_dir: /app
+    # Container needs write access for demos/tools — do not set read_only
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 64
+    mem_limit: 512m
+    # Run the coding agent by default
+    command: ["python", "coding_agent.py"]
