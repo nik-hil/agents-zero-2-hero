@@ -2,6 +2,10 @@ import os
 import subprocess
 import json
 from textwrap import dedent
+import shlex
+import subprocess
+import os
+from typing import Dict
 
 from openai import OpenAI
 from client import get_client
@@ -152,12 +156,89 @@ def write_file(filepath: str, content: str, mode: str = "w") -> dict:
     except Exception as e:
         return {"error": str(e)}
     
+
+def bash(command: str, verbose: bool = True) -> Dict:
+    """
+    Safely execute a limited set of shell-like commands.
+
+    This is a constrained command runner intended for AI agent tutorials.
+    It does NOT execute through a shell and only allows explicit commands.
+    """
+    # Commands intentionally allowed for demonstration
+    ALLOWED_COMMANDS = {
+        "ls",
+        "grep",
+        "pip list"
+        "pwd",
+        "cat",
+        "echo",
+        "python",
+        "python3",
+        "pip",
+    }
+
+    try:
+        if not command or not command.strip():
+            return {"error": "Empty command not allowed"}
+
+        # Parse like a shell, but DO NOT execute via shell
+        try:
+            args = shlex.split(command)
+        except ValueError as e:
+            return {"error": f"Invalid shell syntax: {e}"}
+
+        cmd = args[0]
+
+        # Enforce allowlist
+        if cmd not in ALLOWED_COMMANDS:
+            return {
+                "error": "Command not allowed",
+                "allowed_commands": sorted(ALLOWED_COMMANDS),
+                "attempted": cmd,
+            }
+
+        # Prevent path traversal in arguments
+        for a in args[1:]:
+            if a.startswith("/") or ".." in a:
+                return {
+                    "error": "Absolute paths and parent directory access are not allowed",
+                    "argument": a,
+                }
+        if verbose:
+            print(f"Executing command: {args} in {WORKSPACE}")       
+        result = subprocess.run(
+            args,
+            cwd=WORKSPACE,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            shell=False,
+            env={
+                "PATH": "/usr/bin:/bin",
+                "HOME": WORKSPACE,
+            },
+        )
+
+        return {
+            "command": args,
+            "stdout": result.stdout.strip() or "(no output)",
+            "stderr": result.stderr.strip() or "(no error output)",
+            "exit_code": result.returncode,
+            "success": result.returncode == 0,
+        }
+
+    except subprocess.TimeoutExpired:
+        return {"error": "Command timed out"}
+    except Exception as e:
+        return {"error": f"Unexpected error: {str(e)}"}
+    
 TOOLS = {
     "execute_code": execute_code,
     "finish": finish,
     "list_files": list_files,
     "read_file": read_file,
     "write_file": write_file,
+    "bash": bash,
 }
 
 
@@ -260,7 +341,29 @@ TOOL_SCHEMAS = [
                 "required": ["filepath", "content"]
             }
         }
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "bash",
+            "description": (
+                "Run a shell command inside the workspace directory. "
+                "Useful for git operations, listing files with options, running tests, "
+                "simple greps, checking environment, etc. "
+                "Dangerous or destructive commands are blocked."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The shell command to execute (e.g. 'ls -la', 'git status', 'pytest', 'grep -r TODO .')"
+                    }
+                },
+                "required": ["command"]
+            }
+        }
+    },
 ]
 
 
@@ -273,6 +376,7 @@ def run_agent(task: str, max_iterations: int = 8, model="x-ai/grok-4.1-fast", ve
         - read_file(filepath)         → read file content
         - write_file(filepath, content, mode="w") → create/overwrite/append file
         - execute_code(code)          → run Python code and see output
+        - bash(command)               → run a shell command inside the workspace (git, tests, grep, ls with options, etc.). Dangerous commands are blocked.
         - finish(answer)              → submit the final answer when done
 
         Rules:
@@ -364,23 +468,20 @@ def run_agent(task: str, max_iterations: int = 8, model="x-ai/grok-4.1-fast", ve
 if __name__ == "__main__":
     # List of demo tasks to showcase each tool
     demo_tasks = [
-        # Demo 1: list_files
-        "Explore the workspace with list_files and return the list of items as the final answer.",
-        
-        # Demo 2: write_file (overwrite/create)
-        "Create a new file called demo.txt with the content 'Initial test content'. Then finish with 'File created successfully'.",
-        
-        # Demo 3: write_file (append)
-        "Append ' Appended line' to demo.txt using mode='a'. Then finish with 'File appended successfully'.",
-        
-        # Demo 4: read_file
-        "Read the content of demo.txt and return the full content as the final answer.",
-        
-        # Demo 5: execute_code
-        "Execute Python code to calculate and print the sum of numbers from 1 to 10. Return the output.",
-        
-        # Demo 6: Combined (write + execute + finish)
-        "Write a Python script to demo.py that prints FizzBuzz up to 10, execute it, and return the output."
+        # Test 1 – basic inspection
+        "Show me the detailed file listing (including sizes and dates) of the current workspace.",
+
+        # Test 2 – git (if you initialized a repo)
+        "Initialize a git repository in the workspace if it doesn't exist, then show git status.",
+
+        # Test 3 – find python files
+        "Find all .py files in the workspace and subdirectories.",
+
+        # Test 4 – grep
+        "Search for the word \"TODO\" or \"FIXME\" in all Python files.",
+
+        # Test 5 – environment check
+        "Show me which Python version is active and what packages are installed (pip list).",
     ]
 
     # Run each demo
