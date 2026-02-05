@@ -1,0 +1,10 @@
+# Ignore git metadata in project root and any subfolders
+.git
+**/.git
+
+# Ignore local env file (do not include secrets in the image)
+.env
+
+# Optionally ignore Python cache
+__pycache__/
+.pytest_cache/

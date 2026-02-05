@@ -11,6 +11,8 @@ COPY . .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+RUN apt update && apt install -y ripgrep
+
 # Create workspace
 RUN mkdir -p /app/workspace && \
     chown -R agent:agent /app
@@ -20,4 +22,4 @@ USER agent
 ENV PYTHONUNBUFFERED=1
 
 # Default to running the coding agent directly
-CMD ["python", "coding_agent.py"]
+CMD ["sleep", "3600"]  

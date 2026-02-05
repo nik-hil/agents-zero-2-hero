@@ -9,7 +9,7 @@ from typing import Dict
 
 from openai import OpenAI
 from client import get_client
-
+import shutil
 from pathlib import Path
 
 # IMPORTANT: all file operations will happen here
@@ -168,7 +168,7 @@ def bash(command: str, verbose: bool = True) -> Dict:
     ALLOWED_COMMANDS = {
         "ls",
         "grep",
-        "pip list"
+        "pip list",
         "pwd",
         "cat",
         "echo",
@@ -232,6 +232,131 @@ def bash(command: str, verbose: bool = True) -> Dict:
     except Exception as e:
         return {"error": f"Unexpected error: {str(e)}"}
     
+def edit_file(filepath: str, search_text: str, replace_text: str) -> dict:
+    """
+    Replace a specific block of text in an existing file with new text.
+    This is useful for precise edits without overwriting the entire file.
+    
+    - search_text: the exact existing text/block to find and replace
+    - replace_text: the new text to insert in its place
+    """
+    try:
+        full_path = (WORKSPACE / filepath).resolve()
+        
+        if not full_path.is_relative_to(WORKSPACE):
+            return {"error": "Path must be inside workspace"}
+        
+        if not full_path.is_file():
+            return {"error": f"File does not exist: {filepath}"}
+        
+        original_content = full_path.read_text(encoding="utf-8")
+        
+        if search_text not in original_content:
+            return {
+                "error": "search_text not found in the file",
+                "filepath": filepath,
+                "search_text_snippet": search_text[:100] + "..." if len(search_text) > 100 else search_text
+            }
+        
+        # Replace only the first occurrence (to be safe and predictable)
+        updated_content = original_content.replace(search_text, replace_text, 1)
+        
+        full_path.write_text(updated_content, encoding="utf-8")
+        
+        return {
+            "status": "success",
+            "filepath": filepath,
+            "old_length": len(original_content),
+            "new_length": len(updated_content),
+            "change_delta": len(updated_content) - len(original_content),
+            "replaced_block_length": len(search_text)
+        }
+    
+    except Exception as e:
+        return {"error": str(e)}
+    
+
+
+def code_search(pattern: str, file_pattern: str = "*.py", context_lines: int = 2) -> dict:
+    """
+    Search for a pattern across files in the workspace.
+    
+    Uses ripgrep (rg) if available, otherwise falls back to simple grep-like search.
+    
+    Args:
+        pattern:        The search string / regex to look for
+        file_pattern:   Glob pattern of files to search (default: "*.py")
+        context_lines:  Number of context lines to show around matches
+    """
+    try:
+        # Check if ripgrep is available
+        rg_available = shutil.which("rg") is not None
+
+        if rg_available:
+            # Use ripgrep - fast and powerful
+            cmd = [
+                "rg",
+                "--color=never",
+                f"--context={context_lines}",
+                "--glob", file_pattern,
+                pattern,
+                "."
+            ]
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd=WORKSPACE,
+                timeout=20
+            )
+            
+            output = result.stdout.strip()
+            if not output:
+                output = "(no matches found)"
+                
+            return {
+                "method": "ripgrep",
+                "pattern": pattern,
+                "file_pattern": file_pattern,
+                "results": output,
+                "match_count": output.count("\n") // (2 * context_lines + 1) if output else 0
+            }
+        
+        else:
+            # Fallback: simple Python-based search
+            from pathlib import Path
+            matches = []
+            
+            for file_path in WORKSPACE.rglob(file_pattern):
+                try:
+                    content = file_path.read_text(encoding="utf-8", errors="ignore")
+                    lines = content.splitlines()
+                    for i, line in enumerate(lines):
+                        if pattern in line:
+                            start = max(0, i - context_lines)
+                            end = min(len(lines), i + context_lines + 1)
+                            context = "\n".join(lines[start:end])
+                            rel_path = file_path.relative_to(WORKSPACE).as_posix()
+                            matches.append(f"File: {rel_path}\nLine {i+1}:\n{context}\n{'-'*60}")
+                except Exception:
+                    pass  # skip unreadable files
+            
+            result_text = "\n".join(matches) if matches else "(no matches found)"
+            
+            return {
+                "method": "python_fallback",
+                "pattern": pattern,
+                "file_pattern": file_pattern,
+                "results": result_text,
+                "match_count": len(matches)
+            }
+    
+    except subprocess.TimeoutExpired:
+        return {"error": "Search timed out"}
+    except Exception as e:
+        return {"error": str(e)}
+    
+
 TOOLS = {
     "execute_code": execute_code,
     "finish": finish,
@@ -239,11 +364,12 @@ TOOLS = {
     "read_file": read_file,
     "write_file": write_file,
     "bash": bash,
+    "edit_file": edit_file,
+    "code_search": code_search,
 }
 
 
 TOOL_SCHEMAS = [
-    # Previous tools
     {
         "type": "function",
         "function": {
@@ -278,8 +404,6 @@ TOOL_SCHEMAS = [
             }
         }
     },
-
-    # 3 NEW TOOLS
     {
         "type": "function",
         "function": {
@@ -364,6 +488,66 @@ TOOL_SCHEMAS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_file",
+            "description": (
+                "Replace a specific block of text in an existing file with new text. "
+                "Use this for precise, targeted code edits instead of overwriting the whole file. "
+                "The search_text must match exactly (including indentation)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filepath": {
+                        "type": "string",
+                        "description": "Relative path to the file to edit"
+                    },
+                    "search_text": {
+                        "type": "string",
+                        "description": "The exact existing text/block to find and replace (case-sensitive, whitespace-sensitive)"
+                    },
+                    "replace_text": {
+                        "type": "string",
+                        "description": "The new text to insert in place of search_text"
+                    }
+                },
+                "required": ["filepath", "search_text", "replace_text"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "code_search",
+            "description": (
+                "Search for a text pattern or regex across files in the workspace. "
+                "Uses ripgrep (rg) if installed, otherwise a simple Python-based search. "
+                "Great for finding function definitions, usages, TODOs, variable names, etc."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "The string or regex pattern to search for"
+                    },
+                    "file_pattern": {
+                        "type": "string",
+                        "description": "Glob pattern of files to include (default: '*.py')",
+                        "default": "*.py"
+                    },
+                    "context_lines": {
+                        "type": "integer",
+                        "description": "Number of context lines around each match (default: 2)",
+                        "default": 2
+                    }
+                },
+                "required": ["pattern"]
+            }
+        }
+    }
 ]
 
 
@@ -377,6 +561,8 @@ def run_agent(task: str, max_iterations: int = 8, model="x-ai/grok-4.1-fast", ve
         - write_file(filepath, content, mode="w") → create/overwrite/append file
         - execute_code(code)          → run Python code and see output
         - bash(command)               → run a shell command inside the workspace (git, tests, grep, ls with options, etc.). Dangerous commands are blocked.
+        - edit_file(filepath, search_text, replace_text) → replace a specific block of text in a file with new text (precise edits)
+        - code_search(pattern, file_pattern="*.py", context_lines=2) → search for a pattern across files (uses ripgrep if available)
         - finish(answer)              → submit the final answer when done
 
         Rules:
@@ -468,25 +654,21 @@ def run_agent(task: str, max_iterations: int = 8, model="x-ai/grok-4.1-fast", ve
 if __name__ == "__main__":
     # List of demo tasks to showcase each tool
     demo_tasks = [
-        # Test 1 – basic inspection
-        "Show me the detailed file listing (including sizes and dates) of the current workspace.",
+        # edit_file example
+        "Change the print statement in demo.py from print(i) to print(f\"Number: {i}\")",
 
-        # Test 2 – git (if you initialized a repo)
-        "Initialize a git repository in the workspace if it doesn't exist, then show git status.",
+        # code_search examples
+        "Find all places where \"print\" is used in Python files",
 
-        # Test 3 – find python files
-        "Find all .py files in the workspace and subdirectories.",
+        "Search for the word \"TODO\" in all files",
 
-        # Test 4 – grep
-        "Search for the word \"TODO\" or \"FIXME\" in all Python files.",
-
-        # Test 5 – environment check
-        "Show me which Python version is active and what packages are installed (pip list).",
+        "Find the definition of the function \"add\" across all .py files",
     ]
 
     # Run each demo
     for i, task in enumerate(demo_tasks, 1):
         print(f"\n{'=' * 80}")
+        print("We are using ripgrep for code search for better results.")
         print(f"DEMO {i}: Task = '{task}'")
         print(f"{'=' * 80}\n")
         

@@ -21,6 +21,5 @@ services:
     cap_drop:
       - ALL
     pids_limit: 64
-    mem_limit: 512m
     # Run the coding agent by default
-    command: ["python", "coding_agent.py"]
+    command: ["sleep", "3600"]
