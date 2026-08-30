@@ -1,14 +1,12 @@
-import os
 import subprocess
 import json
+import argparse
 from textwrap import dedent
 import shlex
-import subprocess
 import os
 from typing import Dict
 
-from openai import OpenAI
-from client import get_client
+from client import OPENROUTER_MODEL, get_client
 import shutil
 from pathlib import Path
 
@@ -20,8 +18,6 @@ print(f"Changed working directory to: {os.getcwd()}")
 
 # Optional: print current workspace so user knows where files are
 print(f"Agent workspace: {WORKSPACE}")
-
-client = get_client()
 
 def execute_code(code: str) -> dict:
     """
@@ -551,7 +547,13 @@ TOOL_SCHEMAS = [
 ]
 
 
-def run_agent(task: str, max_iterations: int = 8, model="x-ai/grok-4.1-fast", verbose=True):
+def run_agent(
+    task: str,
+    max_iterations: int = 8,
+    model: str = OPENROUTER_MODEL,
+    verbose: bool = True,
+    llm_client=None,
+):
     SYSTEM_PROMPT = """\
         You are an autonomous coding agent working inside a dedicated workspace folder.
 
@@ -580,10 +582,12 @@ def run_agent(task: str, max_iterations: int = 8, model="x-ai/grok-4.1-fast", ve
         {"role": "user", "content": task},
     ]
 
+    active_client = llm_client or get_client()
+
     for iteration in range(max_iterations):
         if verbose:
             print(f"\nIteration {iteration + 1}: Calling LLM...")
-        response = client.chat.completions.create(
+        response = active_client.chat.completions.create(
             model=model,
             messages=messages,
             tools=TOOL_SCHEMAS,
@@ -601,13 +605,6 @@ def run_agent(task: str, max_iterations: int = 8, model="x-ai/grok-4.1-fast", ve
         message = response.choices[0].message
         if verbose and message.content:
             print(f"Assistant thinking: {message.content}")
-        messages.append(
-            {
-                "role": "assistant",
-                "content": message.content,
-                "tool_calls": message.tool_calls,   # keep if present
-            }
-        )
         # -------------------------
         # TOOL CALL HANDLING
         # -------------------------
@@ -616,11 +613,41 @@ def run_agent(task: str, max_iterations: int = 8, model="x-ai/grok-4.1-fast", ve
 
             for tool_call in message.tool_calls:
                 tool_name = tool_call.function.name
-                args = json.loads(tool_call.function.arguments)
+                try:
+                    args = json.loads(tool_call.function.arguments or "{}")
+                except json.JSONDecodeError as exc:
+                    args = {}
+                    result = {
+                        "error": "Invalid JSON arguments from model",
+                        "details": str(exc),
+                        "raw_arguments": tool_call.function.arguments,
+                    }
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": json.dumps(result),
+                        }
+                    )
+                    continue
                 if verbose:
                     print(f"Tool call: {tool_name} with args: {args}")
 
-                result = TOOLS[tool_name](**args)
+                if tool_name not in TOOLS:
+                    result = {
+                        "error": "Unknown tool requested by model",
+                        "tool_name": tool_name,
+                        "available_tools": sorted(TOOLS.keys()),
+                    }
+                else:
+                    try:
+                        result = TOOLS[tool_name](**args)
+                    except Exception as exc:
+                        result = {
+                            "error": "Tool execution failed",
+                            "tool_name": tool_name,
+                            "details": str(exc),
+                        }
 
                 if verbose:
                     print(f"Tool result: {json.dumps(result, indent=2)}")
@@ -652,6 +679,20 @@ def run_agent(task: str, max_iterations: int = 8, model="x-ai/grok-4.1-fast", ve
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run the v04 Python-only coding agent loop.")
+    parser.add_argument(
+        "task",
+        nargs="?",
+        help="Task for the agent. If omitted, built-in demos are executed.",
+    )
+    parser.add_argument("--max-steps", type=int, default=8, help="Maximum agent loop iterations.")
+    parser.add_argument("--model", default=OPENROUTER_MODEL, help="OpenRouter model id.")
+    args = parser.parse_args()
+
+    if args.task:
+        print(run_agent(args.task, max_iterations=args.max_steps, model=args.model, verbose=True))
+        raise SystemExit(0)
+
     # List of demo tasks to showcase each tool
     demo_tasks = [
         # edit_file example
@@ -677,4 +718,3 @@ if __name__ == "__main__":
             print(f"\nFinal Result for Demo {i}: {result}")
         except Exception as e:
             print(f"Error in Demo {i}: {str(e)}")
-
