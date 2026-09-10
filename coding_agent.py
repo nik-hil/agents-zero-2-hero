@@ -8,7 +8,7 @@ import os
 from typing import Dict
 
 from openai import OpenAI
-from client import get_client
+from client import get_client, get_model
 import shutil
 from pathlib import Path
 
@@ -551,7 +551,9 @@ TOOL_SCHEMAS = [
 ]
 
 
-def run_agent(task: str, max_iterations: int = 8, model="x-ai/grok-4.1-fast", verbose=True):
+def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True):
+    # Default to whichever provider/model client.py selected (OpenRouter or DO).
+    model = model or get_model()
     SYSTEM_PROMPT = """\
         You are an autonomous coding agent working inside a dedicated workspace folder.
 
