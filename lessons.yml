@@ -58,7 +58,18 @@ lessons:
     run: python coding_agent.py
     status: done
 
-  - tag: v0.5-permissions
+  - tag: v0.5-multi-provider
+    title: Multiple LLM providers
+    component: provider switch (OpenRouter + DigitalOcean) + unit tests
+    pillar: providers
+    concept: >-
+      Both OpenRouter and DigitalOcean speak the OpenAI API, so supporting both
+      is just swapping base_url + key + model slug behind LLM_PROVIDER. Proves the
+      agent talks to an API shape, not a vendor — and adds the repo's first tests.
+    run: python client.py
+    status: done
+
+  - tag: v0.6-permissions
     title: Permission modes
     component: PermissionChecker (ask / auto / plan + path & command rules)
     pillar: governance
@@ -68,7 +79,7 @@ lessons:
     run: python coding_agent.py
     status: next
 
-  - tag: v0.6-hooks
+  - tag: v0.7-hooks
     title: Lifecycle hooks
     component: PreToolUse / PostToolUse hooks
     pillar: governance
@@ -78,7 +89,7 @@ lessons:
     run: python coding_agent.py
     status: planned
 
-  - tag: v0.7-memory
+  - tag: v0.8-memory
     title: Persistent memory and context
     component: MEMORY.md + AGENTS.md injection + session resume
     pillar: context
@@ -88,7 +99,7 @@ lessons:
     run: python coding_agent.py
     status: planned
 
-  - tag: v0.8-compaction
+  - tag: v0.9-compaction
     title: Context compaction
     component: auto-compact the message history
     pillar: context
@@ -98,7 +109,7 @@ lessons:
     run: python coding_agent.py
     status: planned
 
-  - tag: v0.9-skills
+  - tag: v0.10-skills
     title: On-demand skills
     component: Skill loader (.md files)
     pillar: toolkit
@@ -108,7 +119,7 @@ lessons:
     run: python coding_agent.py
     status: planned
 
-  - tag: v0.10-mcp
+  - tag: v0.11-mcp
     title: An MCP client
     component: minimal Model Context Protocol client
     pillar: toolkit
@@ -118,7 +129,7 @@ lessons:
     run: python coding_agent.py
     status: planned
 
-  - tag: v0.11-subagents
+  - tag: v0.12-subagents
     title: Subagents
     component: spawn + delegate to a subagent
     pillar: swarm
@@ -128,7 +139,7 @@ lessons:
     run: python coding_agent.py
     status: planned
 
-  - tag: v0.12-verify-loop
+  - tag: v0.13-verify-loop
     title: Verification loop
     component: run tests -> read failures -> fix -> rerun
     pillar: loop

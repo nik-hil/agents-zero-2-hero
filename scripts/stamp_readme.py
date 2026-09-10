@@ -38,6 +38,7 @@ README = os.path.join(ROOT, "README.md")
 
 PILLARS = {
     "loop": "🔄 Agent Loop",
+    "providers": "🔌 Providers",
     "toolkit": "🔧 Toolkit",
     "context": "🧠 Context & Memory",
     "governance": "🛡️ Governance",

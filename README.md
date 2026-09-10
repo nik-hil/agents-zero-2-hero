@@ -7,7 +7,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-≥3.10-blue?logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/LLM-OpenRouter-8B5CF6" alt="OpenRouter">
+  <img src="https://img.shields.io/badge/LLM-OpenRouter_|_DigitalOcean-8B5CF6" alt="Providers">
   <img src="https://img.shields.io/badge/style-no--framework-06B6D4" alt="No framework">
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License">
 </p>
@@ -51,17 +51,17 @@ observably.
 ## 📍 Current checkpoint
 
 <!-- BEGIN:checkpoint -->
-**You are on `v0.4-edit-tool` — lesson 4 of 12.**
+**You are on `v0.5-multi-provider` — lesson 5 of 13.**
 
-### Precise edits and search
+### Multiple LLM providers
 
-- **Pillar:** 🔧 Toolkit
-- **Adds:** `edit_file + code_search (ripgrep)`
+- **Pillar:** 🔌 Providers
+- **Adds:** `provider switch (OpenRouter + DigitalOcean) + unit tests`
 
-Targeted search/replace edits instead of rewriting whole files, plus fast code search with a ripgrep-or-Python fallback.
+Both OpenRouter and DigitalOcean speak the OpenAI API, so supporting both is just swapping base_url + key + model slug behind LLM_PROVIDER. Proves the agent talks to an API shape, not a vendor — and adds the repo's first tests.
 
 ```bash
-python coding_agent.py
+python client.py
 ```
 <!-- END:checkpoint -->
 
@@ -129,15 +129,16 @@ older tag and this section reflects that lesson's state.
 | ✅ | `v0.1-basic-tool` | A minimal agent loop with one tool | `execute_code + finish` | 🔄 Agent Loop |
 | ✅ | `v0.2-new-tools` | File tools | `list_files, read_file, write_file` | 🔧 Toolkit |
 | ✅ | `v0.3-bash-tut` | A guarded shell tool | `bash (allowlisted) + Docker` | 🔧 Toolkit |
-| 👉 | `v0.4-edit-tool` | Precise edits and search | `edit_file + code_search (ripgrep)` | 🔧 Toolkit |
-| 🚧 | `v0.5-permissions` | Permission modes | `PermissionChecker (ask / auto / plan + path & command rules)` | 🛡️ Governance |
-| ○ | `v0.6-hooks` | Lifecycle hooks | `PreToolUse / PostToolUse hooks` | 🛡️ Governance |
-| ○ | `v0.7-memory` | Persistent memory and context | `MEMORY.md + AGENTS.md injection + session resume` | 🧠 Context & Memory |
-| ○ | `v0.8-compaction` | Context compaction | `auto-compact the message history` | 🧠 Context & Memory |
-| ○ | `v0.9-skills` | On-demand skills | `Skill loader (.md files)` | 🔧 Toolkit |
-| ○ | `v0.10-mcp` | An MCP client | `minimal Model Context Protocol client` | 🔧 Toolkit |
-| ○ | `v0.11-subagents` | Subagents | `spawn + delegate to a subagent` | 🤝 Swarm |
-| ○ | `v0.12-verify-loop` | Verification loop | `run tests -> read failures -> fix -> rerun` | 🔄 Agent Loop |
+| ✅ | `v0.4-edit-tool` | Precise edits and search | `edit_file + code_search (ripgrep)` | 🔧 Toolkit |
+| 👉 | `v0.5-multi-provider` | Multiple LLM providers | `provider switch (OpenRouter + DigitalOcean) + unit tests` | 🔌 Providers |
+| 🚧 | `v0.6-permissions` | Permission modes | `PermissionChecker (ask / auto / plan + path & command rules)` | 🛡️ Governance |
+| ○ | `v0.7-hooks` | Lifecycle hooks | `PreToolUse / PostToolUse hooks` | 🛡️ Governance |
+| ○ | `v0.8-memory` | Persistent memory and context | `MEMORY.md + AGENTS.md injection + session resume` | 🧠 Context & Memory |
+| ○ | `v0.9-compaction` | Context compaction | `auto-compact the message history` | 🧠 Context & Memory |
+| ○ | `v0.10-skills` | On-demand skills | `Skill loader (.md files)` | 🔧 Toolkit |
+| ○ | `v0.11-mcp` | An MCP client | `minimal Model Context Protocol client` | 🔧 Toolkit |
+| ○ | `v0.12-subagents` | Subagents | `spawn + delegate to a subagent` | 🤝 Swarm |
+| ○ | `v0.13-verify-loop` | Verification loop | `run tests -> read failures -> fix -> rerun` | 🔄 Agent Loop |
 
 👉 you are here · ✅ shipped · 🚧 building next · ○ planned
 <!-- END:roadmap -->
@@ -147,9 +148,10 @@ older tag and this section reflects that lesson's state.
 ## 📂 Repository layout
 
 ```
-client.py           # OpenRouter (OpenAI-compatible) client factory
+client.py           # provider switch: OpenRouter / DigitalOcean (OpenAI-compatible)
 coding_agent.py     # the harness: tools + tool schemas + the agent loop
 frameworks/         # the same idea via CrewAI / LangGraph (framework hides the loop)
+tests/              # offline unit tests (no API key needed)
 lessons/            # one short lesson doc per tag
 lessons.yml         # single source of truth for the curriculum
 scripts/            # tooling (README stamper, ...)
