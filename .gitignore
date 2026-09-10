@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+.venv
+
 # C extensions
 *.so
 
@@ -94,6 +96,12 @@ celerybeat.pid
 
 # SageMath parsed files
 *.sage.py
+
+# Agent runtime workspace (created by coding_agent.py at run time)
+agent_workspace/
+
+# macOS
+.DS_Store
 
 # Environments
 .env

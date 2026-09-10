@@ -1,0 +1,139 @@
+# lessons.yml — single source of truth for the tag-by-tag curriculum.
+#
+# Each entry is one lesson == one git tag == one new component.
+# scripts/stamp_readme.py reads this file to regenerate the "Current checkpoint"
+# and "Roadmap" sections of README.md, so you only maintain this one file.
+#
+# status: done      -> tag exists, component shipped
+#         next      -> the component we are building now
+#         planned   -> on the roadmap, not started
+#
+# pillar: which Agent-Harness pillar the component demonstrates
+#         (loop | toolkit | context | governance | swarm)
+
+project:
+  name: Agents Zero 2 Hero
+  tagline: >-
+    Build a Python coding-agent harness from first principles — one git tag,
+    one new capability at a time.
+
+lessons:
+  - tag: v0.1-basic-tool
+    title: A minimal agent loop with one tool
+    component: execute_code + finish
+    pillar: loop
+    concept: >-
+      The smallest possible harness: send messages + tool schemas to the model,
+      run the tool it picks, feed the result back, stop when it calls finish.
+    run: python coding_agent.py
+    status: done
+
+  - tag: v0.2-new-tools
+    title: File tools
+    component: list_files, read_file, write_file
+    pillar: toolkit
+    concept: >-
+      Give the agent hands and eyes on the filesystem, sandboxed to a workspace
+      directory with path-traversal guards.
+    run: python coding_agent.py
+    status: done
+
+  - tag: v0.3-bash-tut
+    title: A guarded shell tool
+    component: bash (allowlisted) + Docker
+    pillar: toolkit
+    concept: >-
+      Let the agent run shell commands, but only an explicit allowlist, without
+      going through a shell, inside a container.
+    run: docker compose up --build
+    status: done
+
+  - tag: v0.4-edit-tool
+    title: Precise edits and search
+    component: edit_file + code_search (ripgrep)
+    pillar: toolkit
+    concept: >-
+      Targeted search/replace edits instead of rewriting whole files, plus fast
+      code search with a ripgrep-or-Python fallback.
+    run: python coding_agent.py
+    status: done
+
+  - tag: v0.5-permissions
+    title: Permission modes
+    component: PermissionChecker (ask / auto / plan + path & command rules)
+    pillar: governance
+    concept: >-
+      Generalize the bash allowlist into a real permission layer checked before
+      every tool call — ask/auto/plan modes, path rules, denied commands.
+    run: python coding_agent.py
+    status: next
+
+  - tag: v0.6-hooks
+    title: Lifecycle hooks
+    component: PreToolUse / PostToolUse hooks
+    pillar: governance
+    concept: >-
+      Fire user-defined callbacks before and after each tool runs — logging,
+      redaction, blocking, metrics.
+    run: python coding_agent.py
+    status: planned
+
+  - tag: v0.7-memory
+    title: Persistent memory and context
+    component: MEMORY.md + AGENTS.md injection + session resume
+    pillar: context
+    concept: >-
+      Persist facts across runs and inject project context into the system
+      prompt; resume a previous session.
+    run: python coding_agent.py
+    status: planned
+
+  - tag: v0.8-compaction
+    title: Context compaction
+    component: auto-compact the message history
+    pillar: context
+    concept: >-
+      Summarize old turns when the conversation grows so long sessions stay
+      under the context window.
+    run: python coding_agent.py
+    status: planned
+
+  - tag: v0.9-skills
+    title: On-demand skills
+    component: Skill loader (.md files)
+    pillar: toolkit
+    concept: >-
+      Load extra domain knowledge only when the task needs it, Claude-style
+      SKILL.md layout.
+    run: python coding_agent.py
+    status: planned
+
+  - tag: v0.10-mcp
+    title: An MCP client
+    component: minimal Model Context Protocol client
+    pillar: toolkit
+    concept: >-
+      Mount an external MCP server's tools into the harness so the agent can use
+      tools it did not ship with.
+    run: python coding_agent.py
+    status: planned
+
+  - tag: v0.11-subagents
+    title: Subagents
+    component: spawn + delegate to a subagent
+    pillar: swarm
+    concept: >-
+      Let the main agent hand a scoped task to a fresh child agent and collect
+      its result.
+    run: python coding_agent.py
+    status: planned
+
+  - tag: v0.12-verify-loop
+    title: Verification loop
+    component: run tests -> read failures -> fix -> rerun
+    pillar: loop
+    concept: >-
+      Close the loop: the agent runs tests, inspects failures, patches, and
+      reruns until green.
+    run: python coding_agent.py
+    status: planned

@@ -10,7 +10,14 @@ useful for development and testing without network access.
 Drop-in replacement for experimenting with CREWAI-driven agents.
 """
 import os
+import sys
 import json
+
+# This file lives in frameworks/ but reuses the tools defined in the repo-root
+# coding_agent.py. Add the repo root to sys.path so the import works no matter
+# where you run this script from.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import crewai
 from coding_agent import TOOLS as CODING_TOOLS
 

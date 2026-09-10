@@ -7,8 +7,14 @@ instead of re-implementing them here. If the `langgraph` SDK isn't available
 the file falls back to a local simulation mode for development and testing.
 """
 import os
+import sys
 import json
 from typing import Dict
+
+# This file lives in frameworks/ but reuses the tools defined in the repo-root
+# coding_agent.py. Add the repo root to sys.path so the import works no matter
+# where you run this script from.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import tools from coding_agent (user requested not to rewrite the tools)
 from coding_agent import TOOLS as CODING_TOOLS
