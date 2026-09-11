@@ -71,13 +71,13 @@ lessons:
 
   - tag: v0.6-permissions
     title: Permission modes
-    component: PermissionChecker (ask / auto / plan + path & command rules)
+    component: PermissionChecker (auto / default / plan + path & command rules)
     pillar: governance
     concept: >-
       Generalize the bash allowlist into a real permission layer checked before
-      every tool call — ask/auto/plan modes, path rules, denied commands.
-    run: python coding_agent.py
-    status: next
+      every tool call — auto/default/plan modes, path rules, denied commands.
+    run: AGENT_PERMISSION_MODE=plan python coding_agent.py
+    status: done
 
   - tag: v0.7-hooks
     title: Lifecycle hooks
@@ -87,7 +87,7 @@ lessons:
       Fire user-defined callbacks before and after each tool runs — logging,
       redaction, blocking, metrics.
     run: python coding_agent.py
-    status: planned
+    status: next
 
   - tag: v0.8-memory
     title: Persistent memory and context
