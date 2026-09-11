@@ -51,17 +51,17 @@ observably.
 ## 📍 Current checkpoint
 
 <!-- BEGIN:checkpoint -->
-**You are on `v0.5-multi-provider` — lesson 5 of 13.**
+**You are on `v0.6-permissions` — lesson 6 of 13.**
 
-### Multiple LLM providers
+### Permission modes
 
-- **Pillar:** 🔌 Providers
-- **Adds:** `provider switch (OpenRouter + DigitalOcean) + unit tests`
+- **Pillar:** 🛡️ Governance
+- **Adds:** `PermissionChecker (auto / default / plan + path & command rules)`
 
-Both OpenRouter and DigitalOcean speak the OpenAI API, so supporting both is just swapping base_url + key + model slug behind LLM_PROVIDER. Proves the agent talks to an API shape, not a vendor — and adds the repo's first tests.
+Generalize the bash allowlist into a real permission layer checked before every tool call — auto/default/plan modes, path rules, denied commands.
 
 ```bash
-python client.py
+AGENT_PERMISSION_MODE=plan python coding_agent.py
 ```
 <!-- END:checkpoint -->
 
@@ -130,9 +130,9 @@ older tag and this section reflects that lesson's state.
 | ✅ | `v0.2-new-tools` | File tools | `list_files, read_file, write_file` | 🔧 Toolkit |
 | ✅ | `v0.3-bash-tut` | A guarded shell tool | `bash (allowlisted) + Docker` | 🔧 Toolkit |
 | ✅ | `v0.4-edit-tool` | Precise edits and search | `edit_file + code_search (ripgrep)` | 🔧 Toolkit |
-| 👉 | `v0.5-multi-provider` | Multiple LLM providers | `provider switch (OpenRouter + DigitalOcean) + unit tests` | 🔌 Providers |
-| 🚧 | `v0.6-permissions` | Permission modes | `PermissionChecker (ask / auto / plan + path & command rules)` | 🛡️ Governance |
-| ○ | `v0.7-hooks` | Lifecycle hooks | `PreToolUse / PostToolUse hooks` | 🛡️ Governance |
+| ✅ | `v0.5-multi-provider` | Multiple LLM providers | `provider switch (OpenRouter + DigitalOcean) + unit tests` | 🔌 Providers |
+| 👉 | `v0.6-permissions` | Permission modes | `PermissionChecker (auto / default / plan + path & command rules)` | 🛡️ Governance |
+| 🚧 | `v0.7-hooks` | Lifecycle hooks | `PreToolUse / PostToolUse hooks` | 🛡️ Governance |
 | ○ | `v0.8-memory` | Persistent memory and context | `MEMORY.md + AGENTS.md injection + session resume` | 🧠 Context & Memory |
 | ○ | `v0.9-compaction` | Context compaction | `auto-compact the message history` | 🧠 Context & Memory |
 | ○ | `v0.10-skills` | On-demand skills | `Skill loader (.md files)` | 🔧 Toolkit |
@@ -150,6 +150,7 @@ older tag and this section reflects that lesson's state.
 ```
 client.py           # provider switch: OpenRouter / DigitalOcean (OpenAI-compatible)
 coding_agent.py     # the harness: tools + tool schemas + the agent loop
+permissions.py      # permission gate: auto/default/plan modes, path & command rules
 frameworks/         # the same idea via CrewAI / LangGraph (framework hides the loop)
 tests/              # offline unit tests (no API key needed)
 lessons/            # one short lesson doc per tag

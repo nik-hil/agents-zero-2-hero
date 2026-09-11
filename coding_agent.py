@@ -9,6 +9,7 @@ from typing import Dict
 
 from openai import OpenAI
 from client import get_client, get_model
+from permissions import PermissionChecker, cli_approver
 import shutil
 from pathlib import Path
 
@@ -551,9 +552,16 @@ TOOL_SCHEMAS = [
 ]
 
 
-def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True):
+def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True, permissions=None):
     # Default to whichever provider/model client.py selected (OpenRouter or DO).
     model = model or get_model()
+    # Every tool call is gated by this checker. Mode comes from AGENT_PERMISSION_MODE
+    # (auto | default | plan); auto keeps the earlier demos running unattended.
+    if permissions is None:
+        permissions = PermissionChecker(
+            mode=os.getenv("AGENT_PERMISSION_MODE", "auto"),
+            approver=cli_approver,
+        )
     SYSTEM_PROMPT = """\
         You are an autonomous coding agent working inside a dedicated workspace folder.
 
@@ -572,6 +580,8 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True):
         - Use relative paths only (never absolute paths).
         - Read files before trying to modify or understand them.
         - Think step by step. Describe your plan before acting.
+        - A permission layer may block a tool call; if a result says "permission denied",
+          adjust your approach instead of retrying the same call.
         - When the task is completely solved → call finish() with the answer.
         """
     messages = [
@@ -622,13 +632,21 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True):
                 if verbose:
                     print(f"Tool call: {tool_name} with args: {args}")
 
-                result = TOOLS[tool_name](**args)
+                # Permission gate: check BEFORE running. Denied calls return an
+                # error to the model (so it can adapt) instead of executing.
+                decision = permissions.check(tool_name, args)
+                if not decision.allowed:
+                    result = {"error": "permission denied", "reason": decision.reason}
+                    if verbose:
+                        print(f"Permission denied: {decision.reason}")
+                else:
+                    result = TOOLS[tool_name](**args)
 
                 if verbose:
                     print(f"Tool result: {json.dumps(result, indent=2)}")
 
                 # Immediately exit on finish
-                if tool_name == "finish":
+                if decision.allowed and tool_name == "finish":
                     return result["final_answer"]
 
                 messages.append(
@@ -654,29 +672,30 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True):
 
 
 if __name__ == "__main__":
-    # List of demo tasks to showcase each tool
-    demo_tasks = [
-        # edit_file example
-        "Change the print statement in demo.py from print(i) to print(f\"Number: {i}\")",
+    mode = os.getenv("AGENT_PERMISSION_MODE", "auto")
 
-        # code_search examples
-        "Find all places where \"print\" is used in Python files",
+    # A single self-contained task that WRITES a file. The whole point is to see
+    # how the same task behaves under different permission modes:
+    #   auto    -> the file gets written
+    #   plan    -> the write is blocked (you'll see "Permission denied: ...")
+    #   default -> you're prompted y/N before the write
+    task = "Create a file called notes.txt containing the text 'hello from the agent', then finish."
 
-        "Search for the word \"TODO\" in all files",
+    print(f"\n{'=' * 80}")
+    print(f"Permission mode: {mode}   (set AGENT_PERMISSION_MODE=auto|default|plan)")
+    print(f"Task: {task}")
+    print(f"{'=' * 80}\n")
 
-        "Find the definition of the function \"add\" across all .py files",
-    ]
+    # Start clean so the outcome reflects THIS run's mode, not a leftover file.
+    (WORKSPACE / "notes.txt").unlink(missing_ok=True)
 
-    # Run each demo
-    for i, task in enumerate(demo_tasks, 1):
-        print(f"\n{'=' * 80}")
-        print("We are using ripgrep for code search for better results.")
-        print(f"DEMO {i}: Task = '{task}'")
-        print(f"{'=' * 80}\n")
-        
-        try:
-            result = run_agent(task, max_iterations=10, verbose=True)  # verbose=True for clear demo
-            print(f"\nFinal Result for Demo {i}: {result}")
-        except Exception as e:
-            print(f"Error in Demo {i}: {str(e)}")
+    try:
+        result = run_agent(task, max_iterations=8, verbose=True)
+        print(f"\nFinal result: {result}")
+    except Exception as e:
+        print(f"\nError: {e}")
+
+    # Show the outcome so the effect of the mode is obvious.
+    created = (WORKSPACE / "notes.txt").exists()
+    print(f"\nnotes.txt created? {created}   (expected: False in plan mode, True in auto)")
 
