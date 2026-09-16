@@ -10,6 +10,7 @@ from typing import Dict
 from openai import OpenAI
 from client import get_client, get_model
 from permissions import PermissionChecker, cli_approver
+from hooks import HookManager
 import shutil
 from pathlib import Path
 
@@ -552,7 +553,8 @@ TOOL_SCHEMAS = [
 ]
 
 
-def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True, permissions=None):
+def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
+              permissions=None, hooks=None):
     # Default to whichever provider/model client.py selected (OpenRouter or DO).
     model = model or get_model()
     # Every tool call is gated by this checker. Mode comes from AGENT_PERMISSION_MODE
@@ -562,6 +564,9 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True, perm
             mode=os.getenv("AGENT_PERMISSION_MODE", "auto"),
             approver=cli_approver,
         )
+    # Lifecycle hooks around each tool call. Default: no hooks (a no-op manager).
+    if hooks is None:
+        hooks = HookManager()
     SYSTEM_PROMPT = """\
         You are an autonomous coding agent working inside a dedicated workspace folder.
 
@@ -632,21 +637,31 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True, perm
                 if verbose:
                     print(f"Tool call: {tool_name} with args: {args}")
 
-                # Permission gate: check BEFORE running. Denied calls return an
-                # error to the model (so it can adapt) instead of executing.
+                # 1) Permission gate: hard allow/deny before anything runs.
                 decision = permissions.check(tool_name, args)
-                if not decision.allowed:
+                blocked = not decision.allowed
+                if blocked:
                     result = {"error": "permission denied", "reason": decision.reason}
                     if verbose:
                         print(f"Permission denied: {decision.reason}")
                 else:
-                    result = TOOLS[tool_name](**args)
+                    # 2) PreToolUse hooks: may rewrite args or block the call.
+                    allowed, reason, args = hooks.run_pre(tool_name, args)
+                    if not allowed:
+                        blocked = True
+                        result = {"error": "blocked by hook", "reason": reason}
+                        if verbose:
+                            print(f"Hook blocked: {reason}")
+                    else:
+                        # 3) Execute, then PostToolUse hooks may rewrite the result.
+                        result = TOOLS[tool_name](**args)
+                        result = hooks.run_post(tool_name, args, result)
 
                 if verbose:
                     print(f"Tool result: {json.dumps(result, indent=2)}")
 
                 # Immediately exit on finish
-                if decision.allowed and tool_name == "finish":
+                if not blocked and tool_name == "finish":
                     return result["final_answer"]
 
                 messages.append(
@@ -689,11 +704,22 @@ if __name__ == "__main__":
     # Start clean so the outcome reflects THIS run's mode, not a leftover file.
     (WORKSPACE / "notes.txt").unlink(missing_ok=True)
 
+    # Attach lifecycle hooks: a timing logger (pre+post) and a usage counter (post).
+    from hooks import HookManager, TimingLogger, make_counter
+    timer = TimingLogger()
+    tool_counts = {}
+    hooks = HookManager(
+        pre=[timer.pre],
+        post=[timer.post, make_counter(tool_counts)],
+    )
+
     try:
-        result = run_agent(task, max_iterations=8, verbose=True)
+        result = run_agent(task, max_iterations=8, verbose=True, hooks=hooks)
         print(f"\nFinal result: {result}")
     except Exception as e:
         print(f"\nError: {e}")
+
+    print(f"Tool usage (from counter hook): {tool_counts}")
 
     # Show the outcome so the effect of the mode is obvious.
     created = (WORKSPACE / "notes.txt").exists()

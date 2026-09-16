@@ -81,13 +81,13 @@ lessons:
 
   - tag: v0.7-hooks
     title: Lifecycle hooks
-    component: PreToolUse / PostToolUse hooks
+    component: PreToolUse / PostToolUse hooks (HookManager)
     pillar: governance
     concept: >-
       Fire user-defined callbacks before and after each tool runs — logging,
-      redaction, blocking, metrics.
+      metrics, redaction, or extra blocking — without touching tools or the loop.
     run: python coding_agent.py
-    status: next
+    status: done
 
   - tag: v0.8-memory
     title: Persistent memory and context
@@ -97,7 +97,7 @@ lessons:
       Persist facts across runs and inject project context into the system
       prompt; resume a previous session.
     run: python coding_agent.py
-    status: planned
+    status: next
 
   - tag: v0.9-compaction
     title: Context compaction
