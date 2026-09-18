@@ -102,13 +102,14 @@ lessons:
 
   - tag: v0.9-compaction
     title: Context compaction
-    component: auto-compact the message history
+    component: Compactor (summarize old turns when over a char budget)
     pillar: context
     concept: >-
-      Summarize old turns when the conversation grows so long sessions stay
-      under the context window.
-    run: python coding_agent.py
-    status: next
+      When the message history exceeds a budget, summarize the older middle into
+      one note and keep system + task + recent turns, so long sessions stay under
+      the context window.
+    run: AGENT_MAX_CONTEXT_CHARS=5000 python coding_agent.py
+    status: done
 
   - tag: v0.10-skills
     title: On-demand skills
@@ -118,7 +119,7 @@ lessons:
       Load extra domain knowledge only when the task needs it, Claude-style
       SKILL.md layout.
     run: python coding_agent.py
-    status: planned
+    status: next
 
   - tag: v0.11-mcp
     title: An MCP client

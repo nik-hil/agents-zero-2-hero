@@ -12,6 +12,7 @@ from client import get_client, get_model
 from permissions import PermissionChecker, cli_approver
 from hooks import HookManager
 from memory import Memory, SessionStore
+from compaction import Compactor, llm_summarizer
 import shutil
 from pathlib import Path
 
@@ -588,7 +589,8 @@ TOOL_SCHEMAS = [
 
 
 def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
-              permissions=None, hooks=None, memory=None, session=None, resume=False):
+              permissions=None, hooks=None, memory=None, session=None, resume=False,
+              compactor=None):
     # Default to whichever provider/model client.py selected (OpenRouter or DO).
     model = model or get_model()
     # Every tool call is gated by this checker. Mode comes from AGENT_PERMISSION_MODE
@@ -604,6 +606,13 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
     # Memory: project context (AGENTS.md) + persistent notes (MEMORY.md).
     if memory is None:
         memory = MEMORY
+    # Compaction: summarize old turns when the history exceeds the char budget.
+    # Threshold from AGENT_MAX_CONTEXT_CHARS; summaries produced by the LLM.
+    if compactor is None:
+        compactor = Compactor(
+            max_chars=int(os.getenv("AGENT_MAX_CONTEXT_CHARS", "8000")),
+            summarizer=llm_summarizer(client, model),
+        )
     SYSTEM_PROMPT = """\
         You are an autonomous coding agent working inside a dedicated workspace folder.
 
@@ -655,6 +664,12 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
     transcript.append({"role": "user", "content": task})
 
     for iteration in range(max_iterations):
+        # Keep the context under budget before every model call.
+        messages, compacted = compactor.maybe_compact(messages)
+        if compacted and verbose:
+            print(f"[compaction] history summarized -> now {len(messages)} messages, "
+                  f"~{sum(len(m.get('content') or '') for m in messages)} chars")
+
         if verbose:
             print(f"\nIteration {iteration + 1}: Calling LLM...")
         response = client.chat.completions.create(
@@ -771,6 +786,9 @@ if __name__ == "__main__":
     print(f"\n{'=' * 80}")
     print(f"Permission mode: {mode}   (AGENT_PERMISSION_MODE=auto|default|plan)")
     print(f"Session: {session}   resume={resume}   (AGENT_SESSION=name AGENT_RESUME=1)")
+    print(f"Context budget: {os.getenv('AGENT_MAX_CONTEXT_CHARS', '8000')} chars "
+          f"(try AGENT_MAX_CONTEXT_CHARS=5000 to see compaction; keep it above the "
+          f"~3000-char system+memory floor)")
     print(f"Task: {task}")
     print(f"{'=' * 80}\n")
 
