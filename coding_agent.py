@@ -628,9 +628,32 @@ TOOL_SCHEMAS = [
 ]
 
 
+SPAWN_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "spawn_subagent",
+        "description": (
+            "Delegate a self-contained subtask to a fresh subagent that has its own "
+            "clean context and the same tools. Returns the subagent's final answer. "
+            "Use for well-scoped sub-jobs (e.g. 'research X', 'refactor file Y') so "
+            "their detail doesn't clutter your own context."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string",
+                         "description": "A complete, standalone instruction for the subagent"}
+            },
+            "required": ["task"],
+        },
+    },
+}
+
+
 def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
               permissions=None, hooks=None, memory=None, session=None, resume=False,
-              compactor=None, extra_tools=None, extra_schemas=None):
+              compactor=None, extra_tools=None, extra_schemas=None,
+              depth=0, max_depth=1):
     # Default to whichever provider/model client.py selected (OpenRouter or DO).
     model = model or get_model()
     # Merge in any externally provided tools (e.g. from an MCP server) so they
@@ -657,6 +680,26 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
             max_chars=int(os.getenv("AGENT_MAX_CONTEXT_CHARS", "8000")),
             summarizer=llm_summarizer(client, model),
         )
+
+    # Subagents: let this agent delegate a scoped subtask to a fresh child agent.
+    # The child gets its OWN clean message history (isolated context) but shares
+    # the same policy (permissions/hooks/memory) and workspace. Bounded by
+    # max_depth so agents can't spawn endlessly.
+    def _spawn_subagent(task, **_ignore):
+        if depth >= max_depth:
+            return {"error": "subagent depth limit reached — do this task yourself"}
+        if verbose:
+            print(f"[subagent] depth {depth + 1}: {task[:70]}")
+        answer = run_agent(
+            task, max_iterations=max_iterations, model=model, verbose=verbose,
+            permissions=permissions, hooks=hooks, memory=memory,
+            depth=depth + 1, max_depth=max_depth,
+        )
+        return {"subagent_result": answer}
+
+    if depth < max_depth:
+        tools_map["spawn_subagent"] = _spawn_subagent
+        schemas = schemas + [SPAWN_SCHEMA]
     SYSTEM_PROMPT = """\
         You are an autonomous coding agent working inside a dedicated workspace folder.
 
@@ -671,6 +714,7 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
         - remember(note)              → save a durable note to persistent memory (MEMORY.md)
         - list_skills()               → list available skills (name + description)
         - load_skill(name)            → load a skill's full guidance on demand
+        - spawn_subagent(task)        → delegate a self-contained subtask to a fresh subagent
         - finish(answer)              → submit the final answer when done
 
         Rules:
@@ -780,6 +824,13 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
                         result = {"error": "blocked by hook", "reason": reason}
                         if verbose:
                             print(f"Hook blocked: {reason}")
+                    elif tool_name not in tools_map:
+                        # Model asked for a tool that isn't available here (e.g.
+                        # spawn beyond max_depth). Return an error, don't crash.
+                        blocked = True
+                        result = {"error": f"unknown tool: {tool_name}"}
+                        if verbose:
+                            print(f"Unknown tool: {tool_name}")
                     else:
                         # 3) Execute, then PostToolUse hooks may rewrite the result.
                         result = tools_map[tool_name](**args)
@@ -831,10 +882,14 @@ if __name__ == "__main__":
     resume = os.getenv("AGENT_RESUME") == "1"
 
     use_mcp = os.getenv("AGENT_MCP") == "1"
+    use_subagent = os.getenv("AGENT_SUBAGENT") == "1"
 
-    # Default task exercises skills. With AGENT_MCP=1 we instead use a tool that
-    # comes from an external MCP server (see mcp_servers/echo_server.py).
-    if use_mcp:
+    # Default task exercises skills. AGENT_MCP=1 uses an external MCP tool;
+    # AGENT_SUBAGENT=1 delegates a subtask to a child agent.
+    if use_subagent:
+        task = ("Delegate to a subagent the task of creating greet.txt containing "
+                "'hi from the subagent'. When it reports done, finish with its result.")
+    elif use_mcp:
         task = "Use the mcp__add tool to add 21 and 21, then finish with the result."
     else:
         task = (

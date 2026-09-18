@@ -51,17 +51,17 @@ observably.
 ## 📍 Current checkpoint
 
 <!-- BEGIN:checkpoint -->
-**You are on `v0.11-mcp` — lesson 11 of 13.**
+**You are on `v0.12-subagents` — lesson 12 of 13.**
 
-### An MCP client
+### Subagents
 
-- **Pillar:** 🔧 Toolkit
-- **Adds:** `MCPClient (stdio JSON-RPC) + example server + tool mounting`
+- **Pillar:** 🤝 Swarm
+- **Adds:** `spawn_subagent tool (depth-guarded delegation)`
 
-Connect to an external Model Context Protocol server, discover its tools, and mount them into the harness alongside the built-ins — so the agent can use tools it did not ship with.
+Let the main agent hand a scoped subtask to a fresh child agent with its own clean context and the same tools, then use the result — bounded by a depth limit so agents can't spawn endlessly.
 
 ```bash
-AGENT_MCP=1 python coding_agent.py
+AGENT_SUBAGENT=1 python coding_agent.py
 ```
 <!-- END:checkpoint -->
 
@@ -136,9 +136,9 @@ older tag and this section reflects that lesson's state.
 | ✅ | `v0.8-memory` | Persistent memory and context | `Memory (AGENTS.md injection + MEMORY.md + remember tool) + SessionStore` | 🧠 Context & Memory |
 | ✅ | `v0.9-compaction` | Context compaction | `Compactor (summarize old turns when over a char budget)` | 🧠 Context & Memory |
 | ✅ | `v0.10-skills` | On-demand skills | `SkillLibrary + list_skills / load_skill tools (SKILL.md)` | 🔧 Toolkit |
-| 👉 | `v0.11-mcp` | An MCP client | `MCPClient (stdio JSON-RPC) + example server + tool mounting` | 🔧 Toolkit |
-| 🚧 | `v0.12-subagents` | Subagents | `spawn + delegate to a subagent` | 🤝 Swarm |
-| ○ | `v0.13-verify-loop` | Verification loop | `run tests -> read failures -> fix -> rerun` | 🔄 Agent Loop |
+| ✅ | `v0.11-mcp` | An MCP client | `MCPClient (stdio JSON-RPC) + example server + tool mounting` | 🔧 Toolkit |
+| 👉 | `v0.12-subagents` | Subagents | `spawn_subagent tool (depth-guarded delegation)` | 🤝 Swarm |
+| 🚧 | `v0.13-verify-loop` | Verification loop | `run tests -> read failures -> fix -> rerun` | 🔄 Agent Loop |
 
 👉 you are here · ✅ shipped · 🚧 building next · ○ planned
 <!-- END:roadmap -->

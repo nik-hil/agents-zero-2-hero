@@ -135,13 +135,14 @@ lessons:
 
   - tag: v0.12-subagents
     title: Subagents
-    component: spawn + delegate to a subagent
+    component: spawn_subagent tool (depth-guarded delegation)
     pillar: swarm
     concept: >-
-      Let the main agent hand a scoped task to a fresh child agent and collect
-      its result.
-    run: python coding_agent.py
-    status: next
+      Let the main agent hand a scoped subtask to a fresh child agent with its own
+      clean context and the same tools, then use the result — bounded by a depth
+      limit so agents can't spawn endlessly.
+    run: AGENT_SUBAGENT=1 python coding_agent.py
+    status: done
 
   - tag: v0.13-verify-loop
     title: Verification loop
@@ -151,4 +152,4 @@ lessons:
       Close the loop: the agent runs tests, inspects failures, patches, and
       reruns until green.
     run: python coding_agent.py
-    status: planned
+    status: next
