@@ -14,6 +14,7 @@ from hooks import HookManager
 from memory import Memory, SessionStore
 from compaction import Compactor, llm_summarizer
 from skills import SkillLibrary
+import verify
 import shutil
 from pathlib import Path
 
@@ -76,6 +77,15 @@ def finish(answer: str):
 def remember(note: str) -> dict:
     """Save a note to persistent memory (MEMORY.md) so future runs recall it."""
     return MEMORY.remember(note)
+
+def run_tests(path: str = ".") -> dict:
+    """Run the test suite in the workspace and report pass/fail + output."""
+    target = (WORKSPACE / path).resolve()
+    if not target.is_relative_to(WORKSPACE):
+        return {"error": "path must be inside the workspace"}
+    import sys as _sys
+    cmd = [_sys.executable, "-m", "unittest", "discover", "-s", str(target), "-p", "test_*.py"]
+    return verify.run_tests(WORKSPACE, command=cmd)
 
 def list_skills() -> dict:
     """List available skills (name + description). Cheap — no bodies loaded."""
@@ -386,6 +396,7 @@ TOOLS = {
     "execute_code": execute_code,
     "finish": finish,
     "remember": remember,
+    "run_tests": run_tests,
     "list_skills": list_skills,
     "load_skill": load_skill,
     "list_files": list_files,
@@ -450,6 +461,25 @@ TOOL_SCHEMAS = [
                     }
                 },
                 "required": ["note"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_tests",
+            "description": (
+                "Run the test suite (unittest discover) in the workspace and get "
+                "back pass/fail plus output. Use this to verify your changes and "
+                "iterate on failures until the tests pass."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string",
+                             "description": "Relative dir to discover tests in (default '.')"}
+                },
+                "required": []
             }
         }
     },
@@ -715,14 +745,19 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
         - list_skills()               → list available skills (name + description)
         - load_skill(name)            → load a skill's full guidance on demand
         - spawn_subagent(task)        → delegate a self-contained subtask to a fresh subagent
+        - run_tests(path=".")         → run the test suite and see pass/fail + output
         - finish(answer)              → submit the final answer when done
 
         Rules:
         - ALWAYS explore the workspace first with list_files when starting a new task.
+        - If the task involves code that has tests, run_tests to verify; if they fail,
+          read the output, fix the code, and run_tests again — repeat until they pass
+          before you finish.
         - If a skill's description matches the task, load_skill() it and follow its guidance.
         - Use relative paths only (never absolute paths).
         - Read files before trying to modify or understand them.
-        - Think step by step. Describe your plan before acting.
+        - Think step by step, but ACT in the same turn: state your next step briefly
+          AND call a tool. Don't reply with only a plan and no tool call.
         - A permission layer may block a tool call; if a result says "permission denied",
           adjust your approach instead of retrying the same call.
         - When the task is completely solved → call finish() with the answer.
@@ -861,12 +896,16 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
                 )
 
         else:
+            # The model replied with text but no tool call (just narrated a plan).
+            # It's already recorded above; nudge it to actually act or finish so
+            # these turns don't silently burn the iteration budget.
             if verbose:
-                print("No tool calls this iteration.")
+                print("No tool calls this iteration — nudging to act.")
             messages.append(
                 {
-                    "role": "assistant",
-                    "content": message.content,
+                    "role": "user",
+                    "content": "Proceed now: call the appropriate tool, or call "
+                               "finish(answer) if the task is already complete.",
                 }
             )
 
@@ -883,10 +922,23 @@ if __name__ == "__main__":
 
     use_mcp = os.getenv("AGENT_MCP") == "1"
     use_subagent = os.getenv("AGENT_SUBAGENT") == "1"
+    use_verify = os.getenv("AGENT_VERIFY") == "1"
 
     # Default task exercises skills. AGENT_MCP=1 uses an external MCP tool;
-    # AGENT_SUBAGENT=1 delegates a subtask to a child agent.
-    if use_subagent:
+    # AGENT_SUBAGENT=1 delegates a subtask; AGENT_VERIFY=1 fixes failing tests.
+    if use_verify:
+        # Seed a buggy module + a failing test, then ask the agent to fix it.
+        (WORKSPACE / "calc.py").write_text("def add(a, b):\n    return a - b\n", encoding="utf-8")
+        (WORKSPACE / "test_calc.py").write_text(
+            "import unittest\nfrom calc import add\n\n"
+            "class T(unittest.TestCase):\n"
+            "    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n",
+            encoding="utf-8",
+        )
+        task = ("The tests in this workspace are failing. Run them, read the failure, "
+                "fix the bug in calc.py, and run the tests again until they pass. "
+                "Then finish.")
+    elif use_subagent:
         task = ("Delegate to a subagent the task of creating greet.txt containing "
                 "'hi from the subagent'. When it reports done, finish with its result.")
     elif use_mcp:
@@ -931,7 +983,7 @@ if __name__ == "__main__":
         extra_tools = make_proxies(mcp, mcp_tools)
 
     try:
-        result = run_agent(task, max_iterations=8, verbose=True, hooks=hooks,
+        result = run_agent(task, max_iterations=15, verbose=True, hooks=hooks,
                            session=session, resume=resume,
                            extra_tools=extra_tools, extra_schemas=extra_schemas)
         print(f"\nFinal result: {result}")
@@ -942,8 +994,17 @@ if __name__ == "__main__":
             mcp.stop()
 
     print(f"Tool usage (from counter hook): {tool_counts}")
-    created = (WORKSPACE / "greet.py").exists()
-    print(f"greet.py created? {created}   (expected: False in plan mode, True in auto)")
+
+    # Report the outcome file relevant to THIS demo mode.
+    if use_verify:
+        r = verify.run_tests(WORKSPACE)
+        print(f"tests passing now? {r['passed']}   (expected: True after the fix)")
+    elif use_subagent:
+        f = WORKSPACE / "greet.txt"
+        print(f"greet.txt created? {f.exists()}   (expected: True in auto)")
+    elif not use_mcp:
+        f = WORKSPACE / "greet.py"
+        print(f"greet.py created? {f.exists()}   (expected: False in plan mode, True in auto)")
 
     # Show that memory persisted to disk between runs.
     print(f"\nMEMORY.md now contains:\n{MEMORY.load_memory() or '(empty)'}")

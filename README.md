@@ -51,17 +51,17 @@ observably.
 ## 📍 Current checkpoint
 
 <!-- BEGIN:checkpoint -->
-**You are on `v0.12-subagents` — lesson 12 of 13.**
+**You are on `v0.13-verify-loop` — lesson 13 of 13.**
 
-### Subagents
+### Verification loop
 
-- **Pillar:** 🤝 Swarm
-- **Adds:** `spawn_subagent tool (depth-guarded delegation)`
+- **Pillar:** 🔄 Agent Loop
+- **Adds:** `run_tests tool (run -> read failures -> fix -> rerun)`
 
-Let the main agent hand a scoped subtask to a fresh child agent with its own clean context and the same tools, then use the result — bounded by a depth limit so agents can't spawn endlessly.
+Close the loop: give the agent a run_tests tool and prompt it to run the suite, read failures, fix the code, and rerun until green — turning "generate and hope" into "generate, verify, fix".
 
 ```bash
-AGENT_SUBAGENT=1 python coding_agent.py
+AGENT_VERIFY=1 python coding_agent.py
 ```
 <!-- END:checkpoint -->
 
@@ -137,8 +137,8 @@ older tag and this section reflects that lesson's state.
 | ✅ | `v0.9-compaction` | Context compaction | `Compactor (summarize old turns when over a char budget)` | 🧠 Context & Memory |
 | ✅ | `v0.10-skills` | On-demand skills | `SkillLibrary + list_skills / load_skill tools (SKILL.md)` | 🔧 Toolkit |
 | ✅ | `v0.11-mcp` | An MCP client | `MCPClient (stdio JSON-RPC) + example server + tool mounting` | 🔧 Toolkit |
-| 👉 | `v0.12-subagents` | Subagents | `spawn_subagent tool (depth-guarded delegation)` | 🤝 Swarm |
-| 🚧 | `v0.13-verify-loop` | Verification loop | `run tests -> read failures -> fix -> rerun` | 🔄 Agent Loop |
+| ✅ | `v0.12-subagents` | Subagents | `spawn_subagent tool (depth-guarded delegation)` | 🤝 Swarm |
+| 👉 | `v0.13-verify-loop` | Verification loop | `run_tests tool (run -> read failures -> fix -> rerun)` | 🔄 Agent Loop |
 
 👉 you are here · ✅ shipped · 🚧 building next · ○ planned
 <!-- END:roadmap -->
@@ -158,6 +158,7 @@ skills.py           # on-demand skills: catalog in the prompt, bodies loaded whe
 skills/             # SKILL.md files (python-style, git-commit, ...)
 mcp_client.py       # minimal MCP client (stdio JSON-RPC) to mount external tools
 mcp_servers/        # bundled example MCP server (echo_server.py) for the demo
+verify.py           # run_tests: run the suite, report pass/fail for the verify loop
 AGENTS.md           # human-authored project context, injected into the prompt each run
 frameworks/         # the same idea via CrewAI / LangGraph (framework hides the loop)
 tests/              # offline unit tests (no API key needed)

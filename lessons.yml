@@ -146,10 +146,11 @@ lessons:
 
   - tag: v0.13-verify-loop
     title: Verification loop
-    component: run tests -> read failures -> fix -> rerun
+    component: run_tests tool (run -> read failures -> fix -> rerun)
     pillar: loop
     concept: >-
-      Close the loop: the agent runs tests, inspects failures, patches, and
-      reruns until green.
-    run: python coding_agent.py
-    status: next
+      Close the loop: give the agent a run_tests tool and prompt it to run the
+      suite, read failures, fix the code, and rerun until green — turning
+      "generate and hope" into "generate, verify, fix".
+    run: AGENT_VERIFY=1 python coding_agent.py
+    status: done
