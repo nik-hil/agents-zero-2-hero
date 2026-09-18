@@ -32,7 +32,8 @@ class Mode(str, Enum):
 
 
 # Tools that cannot change anything -> always safe to run.
-READ_ONLY_TOOLS = {"list_files", "read_file", "code_search", "finish"}
+READ_ONLY_TOOLS = {"list_files", "read_file", "code_search", "finish",
+                   "list_skills", "load_skill"}
 
 # Sensible defaults; a demo can pass its own.
 DEFAULT_DENIED_COMMANDS = [

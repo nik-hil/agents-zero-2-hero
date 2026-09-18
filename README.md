@@ -51,17 +51,17 @@ observably.
 ## 📍 Current checkpoint
 
 <!-- BEGIN:checkpoint -->
-**You are on `v0.9-compaction` — lesson 9 of 13.**
+**You are on `v0.10-skills` — lesson 10 of 13.**
 
-### Context compaction
+### On-demand skills
 
-- **Pillar:** 🧠 Context & Memory
-- **Adds:** `Compactor (summarize old turns when over a char budget)`
+- **Pillar:** 🔧 Toolkit
+- **Adds:** `SkillLibrary + list_skills / load_skill tools (SKILL.md)`
 
-When the message history exceeds a budget, summarize the older middle into one note and keep system + task + recent turns, so long sessions stay under the context window.
+Keep domain knowledge in SKILL.md files loaded only when needed. The agent always sees a cheap catalog (name + description) and pulls a full skill body on demand — dozens of skills without bloating every prompt.
 
 ```bash
-AGENT_MAX_CONTEXT_CHARS=5000 python coding_agent.py
+python coding_agent.py
 ```
 <!-- END:checkpoint -->
 
@@ -134,9 +134,9 @@ older tag and this section reflects that lesson's state.
 | ✅ | `v0.6-permissions` | Permission modes | `PermissionChecker (auto / default / plan + path & command rules)` | 🛡️ Governance |
 | ✅ | `v0.7-hooks` | Lifecycle hooks | `PreToolUse / PostToolUse hooks (HookManager)` | 🛡️ Governance |
 | ✅ | `v0.8-memory` | Persistent memory and context | `Memory (AGENTS.md injection + MEMORY.md + remember tool) + SessionStore` | 🧠 Context & Memory |
-| 👉 | `v0.9-compaction` | Context compaction | `Compactor (summarize old turns when over a char budget)` | 🧠 Context & Memory |
-| 🚧 | `v0.10-skills` | On-demand skills | `Skill loader (.md files)` | 🔧 Toolkit |
-| ○ | `v0.11-mcp` | An MCP client | `minimal Model Context Protocol client` | 🔧 Toolkit |
+| ✅ | `v0.9-compaction` | Context compaction | `Compactor (summarize old turns when over a char budget)` | 🧠 Context & Memory |
+| 👉 | `v0.10-skills` | On-demand skills | `SkillLibrary + list_skills / load_skill tools (SKILL.md)` | 🔧 Toolkit |
+| 🚧 | `v0.11-mcp` | An MCP client | `minimal Model Context Protocol client` | 🔧 Toolkit |
 | ○ | `v0.12-subagents` | Subagents | `spawn + delegate to a subagent` | 🤝 Swarm |
 | ○ | `v0.13-verify-loop` | Verification loop | `run tests -> read failures -> fix -> rerun` | 🔄 Agent Loop |
 
@@ -154,6 +154,8 @@ permissions.py      # permission gate: auto/default/plan modes, path & command r
 hooks.py            # PreToolUse / PostToolUse lifecycle hooks (logging, metrics, redaction)
 memory.py           # context injection (AGENTS.md), persistent memory (MEMORY.md), sessions
 compaction.py       # summarize old turns when history exceeds the context budget
+skills.py           # on-demand skills: catalog in the prompt, bodies loaded when needed
+skills/             # SKILL.md files (python-style, git-commit, ...)
 AGENTS.md           # human-authored project context, injected into the prompt each run
 frameworks/         # the same idea via CrewAI / LangGraph (framework hides the loop)
 tests/              # offline unit tests (no API key needed)

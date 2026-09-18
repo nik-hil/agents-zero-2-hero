@@ -113,13 +113,14 @@ lessons:
 
   - tag: v0.10-skills
     title: On-demand skills
-    component: Skill loader (.md files)
+    component: SkillLibrary + list_skills / load_skill tools (SKILL.md)
     pillar: toolkit
     concept: >-
-      Load extra domain knowledge only when the task needs it, Claude-style
-      SKILL.md layout.
+      Keep domain knowledge in SKILL.md files loaded only when needed. The agent
+      always sees a cheap catalog (name + description) and pulls a full skill body
+      on demand — dozens of skills without bloating every prompt.
     run: python coding_agent.py
-    status: next
+    status: done
 
   - tag: v0.11-mcp
     title: An MCP client
@@ -129,7 +130,7 @@ lessons:
       Mount an external MCP server's tools into the harness so the agent can use
       tools it did not ship with.
     run: python coding_agent.py
-    status: planned
+    status: next
 
   - tag: v0.12-subagents
     title: Subagents

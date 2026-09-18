@@ -13,6 +13,7 @@ from permissions import PermissionChecker, cli_approver
 from hooks import HookManager
 from memory import Memory, SessionStore
 from compaction import Compactor, llm_summarizer
+from skills import SkillLibrary
 import shutil
 from pathlib import Path
 
@@ -25,6 +26,7 @@ WORKSPACE.mkdir(exist_ok=True)
 PROJECT_ROOT = WORKSPACE.parent
 MEMORY = Memory(PROJECT_ROOT)
 SESSIONS = SessionStore(PROJECT_ROOT)
+SKILLS = SkillLibrary(PROJECT_ROOT / "skills")
 
 os.chdir(WORKSPACE)
 print(f"Changed working directory to: {os.getcwd()}")
@@ -74,6 +76,14 @@ def finish(answer: str):
 def remember(note: str) -> dict:
     """Save a note to persistent memory (MEMORY.md) so future runs recall it."""
     return MEMORY.remember(note)
+
+def list_skills() -> dict:
+    """List available skills (name + description). Cheap — no bodies loaded."""
+    return {"skills": SKILLS.catalog()}
+
+def load_skill(name: str) -> dict:
+    """Load the full text of one skill on demand."""
+    return SKILLS.load(name)
 
 def list_files(path: str = ".") -> dict:
     """
@@ -376,6 +386,8 @@ TOOLS = {
     "execute_code": execute_code,
     "finish": finish,
     "remember": remember,
+    "list_skills": list_skills,
+    "load_skill": load_skill,
     "list_files": list_files,
     "read_file": read_file,
     "write_file": write_file,
@@ -438,6 +450,34 @@ TOOL_SCHEMAS = [
                     }
                 },
                 "required": ["note"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_skills",
+            "description": (
+                "List available skills (name + description). Skills are on-demand "
+                "knowledge; call this to see what guidance you can load."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "load_skill",
+            "description": (
+                "Load the full text of one skill by name. Do this when a task "
+                "matches a skill's description, then follow its guidance."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "The skill name from list_skills"}
+                },
+                "required": ["name"]
             }
         }
     },
@@ -625,10 +665,13 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
         - edit_file(filepath, search_text, replace_text) → replace a specific block of text in a file with new text (precise edits)
         - code_search(pattern, file_pattern="*.py", context_lines=2) → search for a pattern across files (uses ripgrep if available)
         - remember(note)              → save a durable note to persistent memory (MEMORY.md)
+        - list_skills()               → list available skills (name + description)
+        - load_skill(name)            → load a skill's full guidance on demand
         - finish(answer)              → submit the final answer when done
 
         Rules:
         - ALWAYS explore the workspace first with list_files when starting a new task.
+        - If a skill's description matches the task, load_skill() it and follow its guidance.
         - Use relative paths only (never absolute paths).
         - Read files before trying to modify or understand them.
         - Think step by step. Describe your plan before acting.
@@ -643,6 +686,13 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
         system_content += "\n\n# Memory\n" + addendum
         if verbose:
             print(f"[memory] injected {len(addendum)} chars of context/notes")
+    # Inject the cheap skills catalog (names + descriptions only — bodies stay
+    # on disk until load_skill pulls one in). This is the "on-demand" part.
+    catalog = SKILLS.catalog_text()
+    if catalog:
+        system_content += "\n\n# Available skills (load with load_skill)\n" + catalog
+        if verbose:
+            print(f"[skills] {len(SKILLS.names())} available: {', '.join(SKILLS.names())}")
 
     messages = [{"role": "system", "content": system_content}]
 
@@ -779,8 +829,9 @@ if __name__ == "__main__":
     # A task that exercises v0.8: it WRITES a file AND asks the agent to remember a
     # fact. Run once, then run again with AGENT_RESUME=1 to see prior context injected.
     task = (
-        "Remember that this project is the 'agents-zero-2-hero' tutorial harness. "
-        "Then create a file called notes.txt containing 'hello from the agent', and finish."
+        "List your available skills, then load the 'python-style' skill and create "
+        "greet.py with a function that returns a greeting, following that skill. "
+        "Finish when done."
     )
 
     print(f"\n{'=' * 80}")
@@ -793,7 +844,7 @@ if __name__ == "__main__":
     print(f"{'=' * 80}\n")
 
     # Start clean so the outcome reflects THIS run's mode, not a leftover file.
-    (WORKSPACE / "notes.txt").unlink(missing_ok=True)
+    (WORKSPACE / "greet.py").unlink(missing_ok=True)
 
     # Attach lifecycle hooks: a timing logger (pre+post) and a usage counter (post).
     from hooks import HookManager, TimingLogger, make_counter
@@ -812,8 +863,8 @@ if __name__ == "__main__":
         print(f"\nError: {e}")
 
     print(f"Tool usage (from counter hook): {tool_counts}")
-    created = (WORKSPACE / "notes.txt").exists()
-    print(f"notes.txt created? {created}   (expected: False in plan mode, True in auto)")
+    created = (WORKSPACE / "greet.py").exists()
+    print(f"greet.py created? {created}   (expected: False in plan mode, True in auto)")
 
     # Show that memory persisted to disk between runs.
     print(f"\nMEMORY.md now contains:\n{MEMORY.load_memory() or '(empty)'}")
