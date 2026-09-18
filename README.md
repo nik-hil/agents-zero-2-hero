@@ -51,17 +51,17 @@ observably.
 ## 📍 Current checkpoint
 
 <!-- BEGIN:checkpoint -->
-**You are on `v0.10-skills` — lesson 10 of 13.**
+**You are on `v0.11-mcp` — lesson 11 of 13.**
 
-### On-demand skills
+### An MCP client
 
 - **Pillar:** 🔧 Toolkit
-- **Adds:** `SkillLibrary + list_skills / load_skill tools (SKILL.md)`
+- **Adds:** `MCPClient (stdio JSON-RPC) + example server + tool mounting`
 
-Keep domain knowledge in SKILL.md files loaded only when needed. The agent always sees a cheap catalog (name + description) and pulls a full skill body on demand — dozens of skills without bloating every prompt.
+Connect to an external Model Context Protocol server, discover its tools, and mount them into the harness alongside the built-ins — so the agent can use tools it did not ship with.
 
 ```bash
-python coding_agent.py
+AGENT_MCP=1 python coding_agent.py
 ```
 <!-- END:checkpoint -->
 
@@ -135,9 +135,9 @@ older tag and this section reflects that lesson's state.
 | ✅ | `v0.7-hooks` | Lifecycle hooks | `PreToolUse / PostToolUse hooks (HookManager)` | 🛡️ Governance |
 | ✅ | `v0.8-memory` | Persistent memory and context | `Memory (AGENTS.md injection + MEMORY.md + remember tool) + SessionStore` | 🧠 Context & Memory |
 | ✅ | `v0.9-compaction` | Context compaction | `Compactor (summarize old turns when over a char budget)` | 🧠 Context & Memory |
-| 👉 | `v0.10-skills` | On-demand skills | `SkillLibrary + list_skills / load_skill tools (SKILL.md)` | 🔧 Toolkit |
-| 🚧 | `v0.11-mcp` | An MCP client | `minimal Model Context Protocol client` | 🔧 Toolkit |
-| ○ | `v0.12-subagents` | Subagents | `spawn + delegate to a subagent` | 🤝 Swarm |
+| ✅ | `v0.10-skills` | On-demand skills | `SkillLibrary + list_skills / load_skill tools (SKILL.md)` | 🔧 Toolkit |
+| 👉 | `v0.11-mcp` | An MCP client | `MCPClient (stdio JSON-RPC) + example server + tool mounting` | 🔧 Toolkit |
+| 🚧 | `v0.12-subagents` | Subagents | `spawn + delegate to a subagent` | 🤝 Swarm |
 | ○ | `v0.13-verify-loop` | Verification loop | `run tests -> read failures -> fix -> rerun` | 🔄 Agent Loop |
 
 👉 you are here · ✅ shipped · 🚧 building next · ○ planned
@@ -156,6 +156,8 @@ memory.py           # context injection (AGENTS.md), persistent memory (MEMORY.m
 compaction.py       # summarize old turns when history exceeds the context budget
 skills.py           # on-demand skills: catalog in the prompt, bodies loaded when needed
 skills/             # SKILL.md files (python-style, git-commit, ...)
+mcp_client.py       # minimal MCP client (stdio JSON-RPC) to mount external tools
+mcp_servers/        # bundled example MCP server (echo_server.py) for the demo
 AGENTS.md           # human-authored project context, injected into the prompt each run
 frameworks/         # the same idea via CrewAI / LangGraph (framework hides the loop)
 tests/              # offline unit tests (no API key needed)

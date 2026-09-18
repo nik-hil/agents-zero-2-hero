@@ -630,9 +630,13 @@ TOOL_SCHEMAS = [
 
 def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
               permissions=None, hooks=None, memory=None, session=None, resume=False,
-              compactor=None):
+              compactor=None, extra_tools=None, extra_schemas=None):
     # Default to whichever provider/model client.py selected (OpenRouter or DO).
     model = model or get_model()
+    # Merge in any externally provided tools (e.g. from an MCP server) so they
+    # sit alongside the built-in ones with no special-casing in the loop.
+    tools_map = {**TOOLS, **(extra_tools or {})}
+    schemas = TOOL_SCHEMAS + list(extra_schemas or [])
     # Every tool call is gated by this checker. Mode comes from AGENT_PERMISSION_MODE
     # (auto | default | plan); auto keeps the earlier demos running unattended.
     if permissions is None:
@@ -725,7 +729,7 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
         response = client.chat.completions.create(
             model=model,
             messages=messages,
-            tools=TOOL_SCHEMAS,
+            tools=schemas,
             tool_choice="auto",
             temperature=0.3,         
             max_tokens=2048,
@@ -778,7 +782,7 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
                             print(f"Hook blocked: {reason}")
                     else:
                         # 3) Execute, then PostToolUse hooks may rewrite the result.
-                        result = TOOLS[tool_name](**args)
+                        result = tools_map[tool_name](**args)
                         result = hooks.run_post(tool_name, args, result)
 
                 if verbose:
@@ -826,13 +830,18 @@ if __name__ == "__main__":
     session = os.getenv("AGENT_SESSION", "demo")
     resume = os.getenv("AGENT_RESUME") == "1"
 
-    # A task that exercises v0.8: it WRITES a file AND asks the agent to remember a
-    # fact. Run once, then run again with AGENT_RESUME=1 to see prior context injected.
-    task = (
-        "List your available skills, then load the 'python-style' skill and create "
-        "greet.py with a function that returns a greeting, following that skill. "
-        "Finish when done."
-    )
+    use_mcp = os.getenv("AGENT_MCP") == "1"
+
+    # Default task exercises skills. With AGENT_MCP=1 we instead use a tool that
+    # comes from an external MCP server (see mcp_servers/echo_server.py).
+    if use_mcp:
+        task = "Use the mcp__add tool to add 21 and 21, then finish with the result."
+    else:
+        task = (
+            "List your available skills, then load the 'python-style' skill and create "
+            "greet.py with a function that returns a greeting, following that skill. "
+            "Finish when done."
+        )
 
     print(f"\n{'=' * 80}")
     print(f"Permission mode: {mode}   (AGENT_PERMISSION_MODE=auto|default|plan)")
@@ -855,12 +864,27 @@ if __name__ == "__main__":
         post=[timer.post, make_counter(tool_counts)],
     )
 
+    # Optionally connect an external MCP server and mount its tools.
+    extra_tools, extra_schemas, mcp = None, None, None
+    if use_mcp:
+        import sys
+        from mcp_client import MCPClient, to_openai_schemas, make_proxies
+        mcp = MCPClient([sys.executable, str(PROJECT_ROOT / "mcp_servers" / "echo_server.py")]).start()
+        mcp_tools = mcp.list_tools()
+        print(f"[mcp] connected; tools: {[t['name'] for t in mcp_tools]}")
+        extra_schemas = to_openai_schemas(mcp_tools)
+        extra_tools = make_proxies(mcp, mcp_tools)
+
     try:
         result = run_agent(task, max_iterations=8, verbose=True, hooks=hooks,
-                           session=session, resume=resume)
+                           session=session, resume=resume,
+                           extra_tools=extra_tools, extra_schemas=extra_schemas)
         print(f"\nFinal result: {result}")
     except Exception as e:
         print(f"\nError: {e}")
+    finally:
+        if mcp:
+            mcp.stop()
 
     print(f"Tool usage (from counter hook): {tool_counts}")
     created = (WORKSPACE / "greet.py").exists()

@@ -124,13 +124,14 @@ lessons:
 
   - tag: v0.11-mcp
     title: An MCP client
-    component: minimal Model Context Protocol client
+    component: MCPClient (stdio JSON-RPC) + example server + tool mounting
     pillar: toolkit
     concept: >-
-      Mount an external MCP server's tools into the harness so the agent can use
-      tools it did not ship with.
-    run: python coding_agent.py
-    status: next
+      Connect to an external Model Context Protocol server, discover its tools,
+      and mount them into the harness alongside the built-ins — so the agent can
+      use tools it did not ship with.
+    run: AGENT_MCP=1 python coding_agent.py
+    status: done
 
   - tag: v0.12-subagents
     title: Subagents
@@ -140,7 +141,7 @@ lessons:
       Let the main agent hand a scoped task to a fresh child agent and collect
       its result.
     run: python coding_agent.py
-    status: planned
+    status: next
 
   - tag: v0.13-verify-loop
     title: Verification loop
