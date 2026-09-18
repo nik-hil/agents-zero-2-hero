@@ -11,12 +11,20 @@ from openai import OpenAI
 from client import get_client, get_model
 from permissions import PermissionChecker, cli_approver
 from hooks import HookManager
+from memory import Memory, SessionStore
 import shutil
 from pathlib import Path
 
 # IMPORTANT: all file operations will happen here
 WORKSPACE = Path("agent_workspace").resolve()
 WORKSPACE.mkdir(exist_ok=True)
+
+# Memory lives at the repo root (WORKSPACE's parent), NOT inside the agent's
+# scratch workspace — so AGENTS.md / MEMORY.md are human-editable and persist.
+PROJECT_ROOT = WORKSPACE.parent
+MEMORY = Memory(PROJECT_ROOT)
+SESSIONS = SessionStore(PROJECT_ROOT)
+
 os.chdir(WORKSPACE)
 print(f"Changed working directory to: {os.getcwd()}")
 
@@ -61,6 +69,10 @@ def execute_code(code: str) -> dict:
 def finish(answer: str):
     """Signals the task is complete with the final answer."""
     return {"final_answer": answer}
+
+def remember(note: str) -> dict:
+    """Save a note to persistent memory (MEMORY.md) so future runs recall it."""
+    return MEMORY.remember(note)
 
 def list_files(path: str = ".") -> dict:
     """
@@ -362,6 +374,7 @@ def code_search(pattern: str, file_pattern: str = "*.py", context_lines: int = 2
 TOOLS = {
     "execute_code": execute_code,
     "finish": finish,
+    "remember": remember,
     "list_files": list_files,
     "read_file": read_file,
     "write_file": write_file,
@@ -403,6 +416,27 @@ TOOL_SCHEMAS = [
                     }
                 },
                 "required": ["answer"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remember",
+            "description": (
+                "Save a short note to persistent memory (MEMORY.md) so it is "
+                "available in future runs. Use for durable facts, preferences, or "
+                "decisions worth recalling later."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "note": {
+                        "type": "string",
+                        "description": "The fact or note to remember (one short sentence)"
+                    }
+                },
+                "required": ["note"]
             }
         }
     },
@@ -554,7 +588,7 @@ TOOL_SCHEMAS = [
 
 
 def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
-              permissions=None, hooks=None):
+              permissions=None, hooks=None, memory=None, session=None, resume=False):
     # Default to whichever provider/model client.py selected (OpenRouter or DO).
     model = model or get_model()
     # Every tool call is gated by this checker. Mode comes from AGENT_PERMISSION_MODE
@@ -567,6 +601,9 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
     # Lifecycle hooks around each tool call. Default: no hooks (a no-op manager).
     if hooks is None:
         hooks = HookManager()
+    # Memory: project context (AGENTS.md) + persistent notes (MEMORY.md).
+    if memory is None:
+        memory = MEMORY
     SYSTEM_PROMPT = """\
         You are an autonomous coding agent working inside a dedicated workspace folder.
 
@@ -578,6 +615,7 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
         - bash(command)               → run a shell command inside the workspace (git, tests, grep, ls with options, etc.). Dangerous commands are blocked.
         - edit_file(filepath, search_text, replace_text) → replace a specific block of text in a file with new text (precise edits)
         - code_search(pattern, file_pattern="*.py", context_lines=2) → search for a pattern across files (uses ripgrep if available)
+        - remember(note)              → save a durable note to persistent memory (MEMORY.md)
         - finish(answer)              → submit the final answer when done
 
         Rules:
@@ -589,13 +627,32 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
           adjust your approach instead of retrying the same call.
         - When the task is completely solved → call finish() with the answer.
         """
-    messages = [
-        {
-            "role": "system",
-            "content": dedent(SYSTEM_PROMPT),
-        },
-        {"role": "user", "content": task},
-    ]
+    # Inject project context + remembered notes into the system prompt.
+    system_content = dedent(SYSTEM_PROMPT)
+    addendum = memory.system_addendum()
+    if addendum:
+        system_content += "\n\n# Memory\n" + addendum
+        if verbose:
+            print(f"[memory] injected {len(addendum)} chars of context/notes")
+
+    messages = [{"role": "system", "content": system_content}]
+
+    # Optionally resume: replay a prior session's transcript as context.
+    transcript = []
+    if session and resume:
+        prior = SESSIONS.load(session)
+        if prior:
+            transcript = list(prior)
+            messages.append({
+                "role": "user",
+                "content": "Here is our earlier session for context:\n\n"
+                           + SESSIONS.as_text(prior),
+            })
+            if verbose:
+                print(f"[session] resumed '{session}' ({len(prior)} entries)")
+
+    messages.append({"role": "user", "content": task})
+    transcript.append({"role": "user", "content": task})
 
     for iteration in range(max_iterations):
         if verbose:
@@ -618,6 +675,8 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
         message = response.choices[0].message
         if verbose and message.content:
             print(f"Assistant thinking: {message.content}")
+        if message.content:
+            transcript.append({"role": "assistant", "content": message.content})
         messages.append(
             {
                 "role": "assistant",
@@ -660,8 +719,17 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
                 if verbose:
                     print(f"Tool result: {json.dumps(result, indent=2)}")
 
+                # Record a compact transcript entry for session resume.
+                transcript.append({"role": "assistant", "content": f"called {tool_name}({args})"})
+                transcript.append({"role": "tool", "content": json.dumps(result)[:400]})
+
                 # Immediately exit on finish
                 if not blocked and tool_name == "finish":
+                    transcript.append({"role": "assistant", "content": result["final_answer"]})
+                    if session:
+                        path = SESSIONS.save(session, transcript)
+                        if verbose:
+                            print(f"[session] saved -> {path}")
                     return result["final_answer"]
 
                 messages.append(
@@ -682,22 +750,27 @@ def run_agent(task: str, max_iterations: int = 8, model=None, verbose=True,
                 }
             )
 
+    if session:
+        SESSIONS.save(session, transcript)
     raise RuntimeError("Max iterations reached without finishing the task.")
     
 
 
 if __name__ == "__main__":
     mode = os.getenv("AGENT_PERMISSION_MODE", "auto")
+    session = os.getenv("AGENT_SESSION", "demo")
+    resume = os.getenv("AGENT_RESUME") == "1"
 
-    # A single self-contained task that WRITES a file. The whole point is to see
-    # how the same task behaves under different permission modes:
-    #   auto    -> the file gets written
-    #   plan    -> the write is blocked (you'll see "Permission denied: ...")
-    #   default -> you're prompted y/N before the write
-    task = "Create a file called notes.txt containing the text 'hello from the agent', then finish."
+    # A task that exercises v0.8: it WRITES a file AND asks the agent to remember a
+    # fact. Run once, then run again with AGENT_RESUME=1 to see prior context injected.
+    task = (
+        "Remember that this project is the 'agents-zero-2-hero' tutorial harness. "
+        "Then create a file called notes.txt containing 'hello from the agent', and finish."
+    )
 
     print(f"\n{'=' * 80}")
-    print(f"Permission mode: {mode}   (set AGENT_PERMISSION_MODE=auto|default|plan)")
+    print(f"Permission mode: {mode}   (AGENT_PERMISSION_MODE=auto|default|plan)")
+    print(f"Session: {session}   resume={resume}   (AGENT_SESSION=name AGENT_RESUME=1)")
     print(f"Task: {task}")
     print(f"{'=' * 80}\n")
 
@@ -714,14 +787,16 @@ if __name__ == "__main__":
     )
 
     try:
-        result = run_agent(task, max_iterations=8, verbose=True, hooks=hooks)
+        result = run_agent(task, max_iterations=8, verbose=True, hooks=hooks,
+                           session=session, resume=resume)
         print(f"\nFinal result: {result}")
     except Exception as e:
         print(f"\nError: {e}")
 
     print(f"Tool usage (from counter hook): {tool_counts}")
-
-    # Show the outcome so the effect of the mode is obvious.
     created = (WORKSPACE / "notes.txt").exists()
-    print(f"\nnotes.txt created? {created}   (expected: False in plan mode, True in auto)")
+    print(f"notes.txt created? {created}   (expected: False in plan mode, True in auto)")
+
+    # Show that memory persisted to disk between runs.
+    print(f"\nMEMORY.md now contains:\n{MEMORY.load_memory() or '(empty)'}")
 

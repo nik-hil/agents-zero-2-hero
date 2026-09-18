@@ -51,14 +51,14 @@ observably.
 ## 📍 Current checkpoint
 
 <!-- BEGIN:checkpoint -->
-**You are on `v0.7-hooks` — lesson 7 of 13.**
+**You are on `v0.8-memory` — lesson 8 of 13.**
 
-### Lifecycle hooks
+### Persistent memory and context
 
-- **Pillar:** 🛡️ Governance
-- **Adds:** `PreToolUse / PostToolUse hooks (HookManager)`
+- **Pillar:** 🧠 Context & Memory
+- **Adds:** `Memory (AGENTS.md injection + MEMORY.md + remember tool) + SessionStore`
 
-Fire user-defined callbacks before and after each tool runs — logging, metrics, redaction, or extra blocking — without touching tools or the loop.
+Give the agent memory: inject AGENTS.md project context into the prompt, let it save durable notes to MEMORY.md via a remember tool, and save/resume a session transcript. Memory is just files you read into the prompt.
 
 ```bash
 python coding_agent.py
@@ -132,9 +132,9 @@ older tag and this section reflects that lesson's state.
 | ✅ | `v0.4-edit-tool` | Precise edits and search | `edit_file + code_search (ripgrep)` | 🔧 Toolkit |
 | ✅ | `v0.5-multi-provider` | Multiple LLM providers | `provider switch (OpenRouter + DigitalOcean) + unit tests` | 🔌 Providers |
 | ✅ | `v0.6-permissions` | Permission modes | `PermissionChecker (auto / default / plan + path & command rules)` | 🛡️ Governance |
-| 👉 | `v0.7-hooks` | Lifecycle hooks | `PreToolUse / PostToolUse hooks (HookManager)` | 🛡️ Governance |
-| 🚧 | `v0.8-memory` | Persistent memory and context | `MEMORY.md + AGENTS.md injection + session resume` | 🧠 Context & Memory |
-| ○ | `v0.9-compaction` | Context compaction | `auto-compact the message history` | 🧠 Context & Memory |
+| ✅ | `v0.7-hooks` | Lifecycle hooks | `PreToolUse / PostToolUse hooks (HookManager)` | 🛡️ Governance |
+| 👉 | `v0.8-memory` | Persistent memory and context | `Memory (AGENTS.md injection + MEMORY.md + remember tool) + SessionStore` | 🧠 Context & Memory |
+| 🚧 | `v0.9-compaction` | Context compaction | `auto-compact the message history` | 🧠 Context & Memory |
 | ○ | `v0.10-skills` | On-demand skills | `Skill loader (.md files)` | 🔧 Toolkit |
 | ○ | `v0.11-mcp` | An MCP client | `minimal Model Context Protocol client` | 🔧 Toolkit |
 | ○ | `v0.12-subagents` | Subagents | `spawn + delegate to a subagent` | 🤝 Swarm |
@@ -152,6 +152,8 @@ client.py           # provider switch: OpenRouter / DigitalOcean (OpenAI-compati
 coding_agent.py     # the harness: tools + tool schemas + the agent loop
 permissions.py      # permission gate: auto/default/plan modes, path & command rules
 hooks.py            # PreToolUse / PostToolUse lifecycle hooks (logging, metrics, redaction)
+memory.py           # context injection (AGENTS.md), persistent memory (MEMORY.md), sessions
+AGENTS.md           # human-authored project context, injected into the prompt each run
 frameworks/         # the same idea via CrewAI / LangGraph (framework hides the loop)
 tests/              # offline unit tests (no API key needed)
 lessons/            # one short lesson doc per tag

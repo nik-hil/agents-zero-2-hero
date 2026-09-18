@@ -91,13 +91,14 @@ lessons:
 
   - tag: v0.8-memory
     title: Persistent memory and context
-    component: MEMORY.md + AGENTS.md injection + session resume
+    component: Memory (AGENTS.md injection + MEMORY.md + remember tool) + SessionStore
     pillar: context
     concept: >-
-      Persist facts across runs and inject project context into the system
-      prompt; resume a previous session.
+      Give the agent memory: inject AGENTS.md project context into the prompt,
+      let it save durable notes to MEMORY.md via a remember tool, and save/resume
+      a session transcript. Memory is just files you read into the prompt.
     run: python coding_agent.py
-    status: next
+    status: done
 
   - tag: v0.9-compaction
     title: Context compaction
@@ -107,7 +108,7 @@ lessons:
       Summarize old turns when the conversation grows so long sessions stay
       under the context window.
     run: python coding_agent.py
-    status: planned
+    status: next
 
   - tag: v0.10-skills
     title: On-demand skills

@@ -100,6 +100,10 @@ celerybeat.pid
 # Agent runtime workspace (created by coding_agent.py at run time)
 agent_workspace/
 
+# Agent memory & session state (runtime; MEMORY.md is written by the remember tool)
+MEMORY.md
+.agent_sessions/
+
 # macOS
 .DS_Store
 
